@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban App</title>
+    <!-- CDN para estilos e iconos -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            min-height: 100vh;
+            transition: background-color 0.3s;
+        }
+        .dark-mode {
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+        .kanban-column {
+            min-height: 400px;
+            background-color: #f7fafc;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .dark-mode .kanban-column {
+            background-color: #2d3748;
+        }
+        .task-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            cursor: move;
+            transition: all 0.3s;
+        }
+        .dark-mode .task-card {
+            background-color: #4a5568;
+        }
+        .task-new {
+            border: 2px solid #4299e1; /* Blue for new tasks */
+        }
+        .task-in-progress {
+            border: 2px solid #ecc94b; /* Yellow for in-progress */
+        }
+        .task-at-risk {
+            border: 2px solid #f56565; /* Red for at-risk */
+        }
+        .task-completed {
+            border: 2px solid #48bb78; /* Green for completed */
+        }
+        #app-logo {
+            max-width: 150px;
+            margin: 1rem auto;
+        }
+        .congrats-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #48bb78;
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-size: 2rem;
+            font-weight: bold;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Contenedor principal -->
+    <div id="auth-container" class="min-h-screen flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+            <img src="https://cdn.logojoy.com/wp-content/uploads/2018/05/30164225/572.png"
+                 alt="Kanban Logo" id="app-logo" class="block">
+            <div id="login-form">
+                <h2 class="text-2xl font-bold mb-6 text-center">Iniciar Sesión</h2>
+                <input type="email" id="login-email" class="w-full p-2 mb-4 border rounded" placeholder="Email">
+                <input type="password" id="login-password" class="w-full p-2 mb-4 border rounded" placeholder="Contraseña">
+                <button id="login-btn" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Iniciar Sesión</button>
+                <p class="mt-2 text-center">¿No tienes cuenta? <a href="#" id="show-register" class="text-blue-500">Regístrate</a></p>
+            </div>
+            <div id="register-form" class="hidden">
+                <h2 class="text-2xl font-bold mb-6 text-center">Registro</h2>
+                <input type="email" id="register-email" class="w-full p-2 mb-4 border rounded" placeholder="Email">
+                <input type="password" id="register-password" class="w-full p-2 mb-4 border rounded" placeholder="Contraseña">
+                <button id="register-btn" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Registrarse</button>
+                <p class="mt-2 text-center">¿Ya tienes cuenta? <a href="#" id="show-login" class="text-blue-500">Inicia Sesión</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tablero Kanban -->
+    <div id="kanban-container" class="hidden p-4">
+        <div class="flex justify-between items-center mb-4">
+            <img src="https://cdn.logojoy.com/wp-content/uploads/2018/05/30164225/572.png"
+                 alt="Kanban Logo" class="h-16">
+            <div class="flex items-center">
+                <button id="toggle-dark" class="bg-gray-200 p-2 rounded mr-2">
+                    <i id="theme-icon" class="fas fa-sun"></i>
+                </button>
+                <button id="logout-btn" class="bg-red-500 text-white p-2 rounded">Cerrar Sesión</button>
+            </div>
+        </div>
+        <button id="add-task-btn" class="bg-green-500 text-white p-2 rounded mb-4">+ Nueva Tarea</button>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="kanban-column" id="todo" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <h2 class="text-xl font-semibold mb-2">Por Hacer</h2>
+                <div id="todo-tasks"></div>
+            </div>
+            <div class="kanban-column" id="in-progress" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <h2 class="text-xl font-semibold mb-2">En Proceso</h2>
+                <div id="in-progress-tasks"></div>
+            </div>
+            <div class="kanban-column" id="done" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <h2 class="text-xl font-semibold mb-2">Completado</h2>
+                <div id="done-tasks"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para tareas -->
+    <div id="task-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4" id="modal-title"></h2>
+            <input type="text" id="task-title" class="w-full p-2 mb-2 border rounded" placeholder="Título">
+            <textarea id="task-description" class="w-full p-2 mb-2 border rounded" placeholder="Descripción"></textarea>
+            <select id="task-assignee" class="w-full p-2 mb-2 border rounded">
+                <option value="">Asignar a...</option>
+            </select>
+            <input type="date" id="task-due-date" class="w-full p-2 mb-2 border rounded">
+            <textarea id="task-comments" class="w-full p-2 mb-2 border rounded" placeholder="Comentarios"></textarea>
+            <div class="flex justify-end">
+                <button id="save-task-btn" class="bg-blue-500 text-white p-2 rounded mr-2">Guardar</button>
+                <button id="delete-task-btn" class="bg-red-500 text-white p-2 rounded mr-2 hidden">Eliminar</button>
+                <button id="close-modal-btn" class="bg-gray-500 text-white p-2 rounded">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase y JavaScript -->
+    <script type="module">
+        // Firebase imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+            from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, onSnapshot, doc, getDoc, setDoc }
+            from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
+
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyCVS0e1lCxwtUgz9-KSk43sQo7lo-D2Asc",
+            authDomain: "kanban-65d88.firebaseapp.com",
+            projectId: "kanban-65d88",
+            storageBucket: "kanban-65d88.firebasestorage.app",
+            messagingSenderId: "830959808814",
+            appId: "1:830959808814:web:bb9387182670b355bc4abf"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth();
+        const db = getFirestore();
+        let currentUser = null;
+        let editingTaskId = null;
+
+        // Elementos DOM
+        const authContainer = document.getElementById('auth-container');
+        const kanbanContainer = document.getElementById('kanban-container');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const taskModal = document.getElementById('task-modal');
+        const todoTasks = document.getElementById('todo-tasks');
+        const inProgressTasks = document.getElementById('in-progress-tasks');
+        const doneTasks = document.getElementById('done-tasks');
+        const themeIcon = document.getElementById('theme-icon');
+
+        // Autenticación
+        document.getElementById('login-btn').addEventListener('click', () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            signInWithEmailAndPassword(auth, email, password)
+                .catch(error => alert(error.message));
+        });
+
+        document.getElementById('register-btn').addEventListener('click', () => {
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            createUserWithEmailAndPassword(auth, email, password)
+                .then(async (userCredential) => {
+                    await setDoc(doc(db, 'users', userCredential.user.uid), {
+                        email: email
+                    });
+                })
+                .catch(error => alert(error.message));
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+
+        document.getElementById('show-register').addEventListener('click', () => {
+            loginForm.classList.add('hidden');
+            registerForm.classList.remove('hidden');
+        });
+
+        document.getElementById('show-login').addEventListener('click', () => {
+            registerForm.classList.add('hidden');
+            loginForm.classList.remove('hidden');
+        });
+
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                currentUser = user;
+                authContainer.classList.add('hidden');
+                kanbanContainer.classList.remove('hidden');
+                loadTasks();
+                loadUsers();
+            } else {
+                authContainer.classList.remove('hidden');
+                kanbanContainer.classList.add('hidden');
+            }
+        });
+
+        // Modo oscuro con cambio de icono correcto
+        document.getElementById('toggle-dark').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            if (document.body.classList.contains('dark-mode')) {
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
+            } else {
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            }
+        });
+
+        // Gestión de tareas
+        document.getElementById('add-task-btn').addEventListener('click', () => {
+            editingTaskId = null;
+            document.getElementById('modal-title').textContent = 'Nueva Tarea';
+            document.getElementById('delete-task-btn').classList.add('hidden');
+            taskModal.classList.remove('hidden');
+        });
+
+        document.getElementById('close-modal-btn').addEventListener('click', () => {
+            taskModal.classList.add('hidden');
+            clearModal();
+        });
+
+        document.getElementById('save-task-btn').addEventListener('click', async () => {
+            // Validar que los campos no estén vacíos
+            const title = document.getElementById('task-title').value.trim();
+            const description = document.getElementById('task-description').value.trim();
+            if (!title) {
+                alert('El título de la tarea es obligatorio.');
+                return;
+            }
+
+            // Construir el objeto task con valores seguros
+            const task = {
+                title: title,
+                description: description,
+                assignee: document.getElementById('task-assignee').value || '',
+                dueDate: document.getElementById('task-due-date').value || '',
+                comments: document.getElementById('task-comments').value.trim() || ''
+            };
+
+            // Depuración: Mostrar los valores del formulario
+            console.log('Valores del formulario:', {
+                title: title,
+                description: description,
+                assignee: document.getElementById('task-assignee').value,
+                dueDate: document.getElementById('task-due-date').value,
+                comments: document.getElementById('task-comments').value.trim()
+            });
+
+            try {
+                if (editingTaskId) {
+                    // Obtener el estado actual de la tarea desde Firestore
+                    const taskRef = doc(db, 'tasks', editingTaskId);
+                    const taskSnap = await getDoc(taskRef);
+                    if (!taskSnap.exists()) {
+                        alert('La tarea no existe en la base de datos.');
+                        return;
+                    }
+                    const currentTask = taskSnap.data();
+                    console.log('Documento actual en Firestore:', currentTask);
+
+                    // Preservar status y completedAt solo si existen
+                    if (currentTask.hasOwnProperty('status')) {
+                        task.status = currentTask.status;
+                    }
+                    if (currentTask.hasOwnProperty('completedAt')) {
+                        task.completedAt = currentTask.completedAt;
+                    }
+
+                    // Depuración: Mostrar el objeto final antes de actualizar
+                    console.log('Objeto a enviar a updateDoc:', task);
+
+                    // Actualizar la tarea en Firestore
+                    await updateDoc(taskRef, task);
+                    console.log('Tarea actualizada con éxito:', editingTaskId);
+                } else {
+                    task.status = 'todo';
+                    task.createdAt = new Date().toISOString();
+                    console.log('Objeto a enviar a addDoc:', task);
+                    await addDoc(collection(db, 'tasks'), task);
+                    console.log('Nueva tarea creada con éxito');
+                }
+
+                // Cerrar el modal solo si el guardado fue exitoso
+                taskModal.classList.add('hidden');
+                clearModal();
+            } catch (error) {
+                console.error('Error al guardar la tarea:', error.message);
+                alert('Error al guardar la tarea. Por favor, intenta de nuevo. Detalles: ' + error.message);
+            }
+        });
+
+        document.getElementById('delete-task-btn').addEventListener('click', async () => {
+            if (editingTaskId) {
+                if (confirm('¿Estás seguro de que deseas eliminar esta tarea?')) {
+                    try {
+                        await deleteDoc(doc(db, 'tasks', editingTaskId));
+                        taskModal.classList.add('hidden');
+                        clearModal();
+                        console.log('Tarea eliminada con éxito:', editingTaskId);
+                    } catch (error) {
+                        console.error('Error al eliminar la tarea:', error.message);
+                        alert('Error al eliminar la tarea. Por favor, intenta de nuevo. Detalles: ' + error.message);
+                    }
+                }
+            }
+        });
+
+        // Cargar tareas
+        function loadTasks() {
+            onSnapshot(collection(db, 'tasks'), snapshot => {
+                todoTasks.innerHTML = '';
+                inProgressTasks.innerHTML = '';
+                doneTasks.innerHTML = '';
+
+                snapshot.forEach(doc => {
+                    const task = { id: doc.id, ...doc.data() };
+                    const card = createTaskCard(task);
+                    if (task.status === 'todo') todoTasks.appendChild(card);
+                    else if (task.status === 'in-progress') inProgressTasks.appendChild(card);
+                    else if (task.status === 'done') doneTasks.appendChild(card);
+                });
+            });
+        }
+
+        // Crear tarjeta de tarea
+        function createTaskCard(task) {
+            const card = document.createElement('div');
+            card.className = 'task-card';
+            card.draggable = true;
+            card.id = task.id;
+            card.addEventListener('dragstart', drag);
+
+            const now = new Date();
+            const createdDate = new Date(task.createdAt);
+            const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+            
+            const createdDays = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
+            const daysLeft = dueDate ? Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24)) : null;
+            
+            // Apply status-based styling
+            if (task.status === 'done') {
+                card.classList.add('task-completed');
+            } else if (task.status === 'in-progress') {
+                card.classList.add('task-in-progress');
+            } else if (task.status === 'todo') {
+                card.classList.add('task-new');
+                if (daysLeft !== null && daysLeft <= 3) {
+                    card.classList.remove('task-new');
+                    card.classList.add('task-at-risk');
+                }
+            }
+
+            let timeText = '';
+            if (task.status === 'done' && task.completedAt) {
+                const completedDate = new Date(task.completedAt);
+                const daysToComplete = Math.floor((completedDate - createdDate) / (1000 * 60 * 60 * 24));
+                timeText = `Completada en: ${daysToComplete} días`;
+            } else {
+                timeText = `Pendiente: ${createdDays} días`;
+            }
+
+            card.innerHTML = `
+                <h3 class="font-bold">${task.title}</h3>
+                <p>${task.description}</p>
+                <p><i class="fas fa-user"></i> ${task.assignee || 'Sin asignar'}</p>
+                ${task.dueDate ? `<p><i class="fas fa-calendar"></i> Vence: ${dueDate.toLocaleDateString()} (${daysLeft >= 0 ? daysLeft : 'Vencida hace ' + Math.abs(daysLeft)} días)</p>` : ''}
+                <p><i class="fas fa-clock"></i> ${timeText}</p>
+                ${task.comments ? `<p><i class="fas fa-comment"></i> ${task.comments}</p>` : ''}
+            `;
+
+            card.addEventListener('click', () => editTask(task));
+            return card;
+        }
+
+        // Editar tarea
+        function editTask(task) {
+            editingTaskId = task.id;
+            document.getElementById('modal-title').textContent = 'Editar Tarea';
+            document.getElementById('task-title').value = task.title || '';
+            document.getElementById('task-description').value = task.description || '';
+            document.getElementById('task-assignee').value = task.assignee || '';
+            document.getElementById('task-due-date').value = task.dueDate || '';
+            document.getElementById('task-comments').value = task.comments || '';
+            document.getElementById('delete-task-btn').classList.remove('hidden');
+            taskModal.classList.remove('hidden');
+        }
+
+        // Cargar usuarios
+        function loadUsers() {
+            const assigneeSelect = document.getElementById('task-assignee');
+            assigneeSelect.innerHTML = '<option value="">Asignar a...</option>';
+            onSnapshot(collection(db, 'users'), snapshot => {
+                snapshot.forEach(doc => {
+                    const user = doc.data();
+                    const option = document.createElement('option');
+                    option.value = user.email;
+                    option.textContent = user.email;
+                    assigneeSelect.appendChild(option);
+                });
+            });
+        }
+
+        // Drag and Drop con mensaje de felicitación mejorado
+        window.allowDrop = function(ev) {
+            ev.preventDefault();
+        }
+
+        window.drag = function(ev) {
+            ev.dataTransfer.setData('text', ev.target.id);
+        }
+
+        window.drop = async function(ev) {
+            ev.preventDefault();
+            const taskId = ev.dataTransfer.getData('text');
+            const dropTarget = ev.target.closest('.kanban-column');
+            if (!dropTarget) return;
+
+            const newStatus = dropTarget.id;
+            const taskRef = doc(db, 'tasks', taskId);
+            
+            const taskSnap = await getDoc(taskRef);
+            if (!taskSnap.exists()) return;
+
+            const taskData = taskSnap.data();
+            
+            if (newStatus === 'done' && taskData.dueDate) {
+                const dueDate = new Date(taskData.dueDate);
+                if (new Date() <= dueDate) {
+                    const congrats = document.createElement('div');
+                    congrats.className = 'congrats-modal';
+                    congrats.textContent = '¡FELICIDADES! Tarea Completada a Tiempo 🎉';
+                    document.body.appendChild(congrats);
+                    setTimeout(() => congrats.remove(), 3000);
+                }
+            }
+
+            await updateDoc(taskRef, {
+                status: newStatus,
+                completedAt: newStatus === 'done' ? new Date().toISOString() : null
+            });
+        }
+
+        function clearModal() {
+            document.getElementById('task-title').value = '';
+            document.getElementById('task-description').value = '';
+            document.getElementById('task-assignee').value = '';
+            document.getElementById('task-due-date').value = '';
+            document.getElementById('task-comments').value = '';
+        }
+    </script>
+</body>
+</html>
